@@ -9,6 +9,7 @@ USER root
 RUN curl -fsSL https://ollama.com/install.sh | sh
 RUN curl -fsSL https://opencode.ai/install | bash
 RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN code-server --force --install-extension anthropic.claude-code
 ENV PATH=$HOME/.local/bin:$PATH
 
 # Upgrade code-server
