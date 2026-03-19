@@ -13,6 +13,11 @@ ENV PATH=$HOME/.local/bin:$PATH
 
 # Upgrade code-server
 RUN mamba update -y conda-forge::code-server
+# Install Github Copilot extension
+ARG COPILOT_PATH=GitHub.copilot-chat.0.40.1.universal.vsix
+RUN wget https://github.com/microsoft/vscode-copilot-chat/releases/download/v0.40.1/${COPILOT_PATH} && \
+    code-server --install-extension ./${COPILOT_PATH} && \
+    rm ./${COPILOT_PATH}
 
 # Install python packages
 COPY requirements.txt /tmp/requirements.txt
