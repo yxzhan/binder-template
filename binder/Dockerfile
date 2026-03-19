@@ -5,6 +5,15 @@ USER root
 #============= Install extra software packages =============#
 # RUN apt update && apt install -y curl
 
+# Install vibe coding tools
+RUN curl -fsSL https://ollama.com/install.sh | sh
+RUN curl -fsSL https://opencode.ai/install | bash
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH=$HOME/.local/bin:$PATH
+
+# Upgrade code-server
+RUN mamba update -y conda-forge::code-server
+
 # Install python packages
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
