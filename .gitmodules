@@ -1,0 +1,3 @@
+[submodule "bambot"]
+	path = bambot
+	url = https://github.com/yxzhan/bambot.git

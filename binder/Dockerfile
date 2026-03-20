@@ -20,7 +20,9 @@ RUN wget https://github.com/microsoft/vscode-copilot-chat/releases/download/v0.4
     code-server --install-extension ./${COPILOT_PATH} && \
     rm ./${COPILOT_PATH}
 
-# Install python packages
+# Install ROS 2 bridge and Python packages
+RUN apt-get update && apt-get install -y ros-jazzy-rosbridge-suite \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 #===========================================================#

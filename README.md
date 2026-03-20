@@ -81,6 +81,28 @@ COPY binder/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 ```
 
+## Submodules
+
+This repository includes [bambot](https://github.com/yxzhan/bambot.git) as a git submodule under `./bambot/`.
+
+When cloning this repo, fetch the submodule at the same time:
+
+```bash
+git clone --recurse-submodules <repo-url>
+```
+
+If you have already cloned without submodules, initialise it afterwards:
+
+```bash
+git submodule update --init
+```
+
+To update the submodule to its latest upstream commit:
+
+```bash
+git submodule update --remote bambot
+```
+
 ## Development
 
 ### Run and build docker image Locally (Under repo directory)
