@@ -1,0 +1,189 @@
+"""SOARM101 Mujoco Pick and Place Simulation.
+
+Uses official SOARM101 Mujoco model with pick and place scene.
+"""
+
+import argparse
+import importlib.util
+import sys
+from pathlib import Path
+
+import mujoco
+import mujoco.viewer
+
+
+def get_package_dir() -> Path:
+    return Path(__file__).parent
+
+
+JOINT_NAMES = [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll",
+    "gripper",
+]
+
+HOME_POSITION = {
+    "shoulder_pan": 0.0,
+    "shoulder_lift": 0.0,
+    "elbow_flex": 0.0,
+    "wrist_flex": 0.0,
+    "wrist_roll": 0.0,
+    "gripper": 0.785,
+}
+
+
+def load_model(scene: str = "pick_place") -> mujoco.MjModel:
+    pkg_dir = get_package_dir()
+    if scene == "pick_place":
+        xml_path = pkg_dir / "scene_pick_place.xml"
+    elif scene == "official":
+        xml_path = pkg_dir / "SO101" / "scene.xml"
+    else:
+        xml_path = pkg_dir / "SO101" / "so101_new_calib.xml"
+
+    if not xml_path.exists():
+        print(f"Error: XML file not found: {xml_path}")
+        sys.exit(1)
+
+    model = mujoco.MjModel.from_xml_path(str(xml_path))
+    print(
+        f"Loaded: nq={model.nq}, nbody={model.nbody}, ngeom={model.ngeom}",
+        flush=True,
+    )
+    return model
+
+
+def get_joint_ids(model: mujoco.MjModel) -> dict:
+    ids = {}
+    for name in JOINT_NAMES:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid >= 0:
+            ids[name] = jid
+    return ids
+
+
+def set_joint_positions(data: mujoco.MjData, joint_pos: dict) -> None:
+    for name, pos in joint_pos.items():
+        jid = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if jid >= 0:
+            qpos_adr = data.model.jnt_qposadr[jid]
+            data.qpos[qpos_adr] = pos
+
+
+def reset_cube(data: mujoco.MjData, pos: tuple = (0.15, 0.0, 0.45)) -> None:
+    cube_body_id = mujoco.mj_name2id(
+        data.model, mujoco.mjtObj.mjOBJ_BODY, "cube"
+    )
+    if cube_body_id < 0:
+        return
+    jnt_adr = data.model.body_jntadr[cube_body_id]
+    if jnt_adr < 0:
+        return
+    qpos_adr = data.model.jnt_qposadr[jnt_adr]
+    data.qpos[qpos_adr : qpos_adr + 3] = pos
+    data.qpos[qpos_adr + 3 : qpos_adr + 7] = [1.0, 0.0, 0.0, 0.0]
+    data.qvel[jnt_adr * 3 : jnt_adr * 3 + 6] = 0.0
+
+
+def get_end_effector_pos(data: mujoco.MjData) -> tuple:
+    gripper_id = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_BODY, "gripper")
+    if gripper_id < 0:
+        return (0.0, 0.0, 0.0)
+    return tuple(data.xpos[gripper_id])
+
+
+def run_simulation(
+    model: mujoco.MjModel, use_ros: bool = False
+) -> None:
+    data = mujoco.MjData(model)
+    mujoco.mj_resetData(model, data)
+
+    set_joint_positions(data, HOME_POSITION)
+    mujoco.mj_forward(model, data)
+
+    joint_ids = get_joint_ids(model)
+    print(f"Robot joint IDs: {joint_ids}", flush=True)
+
+    print("\n=== SOARM101 Pick & Place Simulation ===", flush=True)
+    print("Controls:", flush=True)
+    print("  [R]      - Reset arm to home position", flush=True)
+    print("  [C]      - Reset cube to start position", flush=True)
+    print("  [H]      - Print end effector position", flush=True)
+    print("  [Q/ESC]  - Quit", flush=True)
+    print("================================\n", flush=True)
+
+    ros_bridge = None
+    if use_ros:
+        try:
+            spec = importlib.util.spec_from_file_location(
+                "ros_bridge", get_package_dir() / "ros_bridge.py"
+            )
+            ros_bridge_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(ros_bridge_mod)
+            RosBridge = ros_bridge_mod.RosBridge
+            ros_bridge = RosBridge()
+            ros_bridge.start()
+            print(
+                "[Simulation] ROS 2 bridge enabled - listening to /joint_states",
+                flush=True,
+            )
+        except Exception as e:
+            print(
+                f"[Simulation] Failed to start ROS bridge: {e}",
+                flush=True,
+            )
+            print(
+                "[Simulation] Running without ROS control", flush=True
+            )
+            use_ros = False
+
+    reset_cube(data)
+
+    with mujoco.viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=True) as viewer:
+        while viewer.is_running():
+            if use_ros and ros_bridge is not None:
+                ros_positions = ros_bridge.get_joint_positions()
+                if ros_positions:
+                    set_joint_positions(data, ros_positions)
+
+            mujoco.mj_step(model, data)
+            viewer.sync()
+
+    if ros_bridge is not None:
+        ros_bridge.stop()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="SOARM101 Mujoco Pick and Place Simulation"
+    )
+    parser.add_argument(
+        "--ros",
+        action="store_true",
+        default=True,
+        help="Enable ROS 2 /joint_states subscriber (default: enabled)",
+    )
+    parser.add_argument(
+        "--no-ros",
+        action="store_true",
+        help="Disable ROS control",
+    )
+    parser.add_argument(
+        "--scene",
+        "-s",
+        choices=["pick_place", "official", "robot"],
+        default="official",
+        help="Scene: 'official', 'pick_place' (table + cube), or 'robot'",
+    )
+    args = parser.parse_args()
+
+    use_ros = args.ros and not args.no_ros
+    model = load_model(args.scene)
+    run_simulation(model, use_ros=use_ros)
+
+
+if __name__ == "__main__":
+    main()
