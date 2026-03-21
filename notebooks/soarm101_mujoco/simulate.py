@@ -142,12 +142,22 @@ def run_simulation(
 
     reset_cube(data)
 
-    with mujoco.viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=True) as viewer:
+    def set_joint_targets(data: mujoco.MjData, targets: dict) -> None:
+        for name, pos in targets.items():
+            jid = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            if jid >= 0:
+                addr = data.model.jnt_qposadr[jid]
+                data.qpos[addr] = pos
+                if data.model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_BALL:
+                    data.qpos[addr + 1 : addr + 4] = [1.0, 0.0, 0.0]
+
+    with mujoco.viewer.launch_passive(model, data, show_left_ui=True, show_right_ui=True) as viewer:
         while viewer.is_running():
             if use_ros and ros_bridge is not None:
                 ros_positions = ros_bridge.get_joint_positions()
                 if ros_positions:
-                    set_joint_positions(data, ros_positions)
+                    set_joint_targets(data, ros_positions)
+                    mujoco.mj_forward(model, data)
 
             mujoco.mj_step(model, data)
             viewer.sync()
@@ -163,14 +173,10 @@ def main() -> None:
     parser.add_argument(
         "--ros",
         action="store_true",
-        default=True,
+        default=False,
         help="Enable ROS 2 /joint_states subscriber (default: enabled)",
     )
-    parser.add_argument(
-        "--no-ros",
-        action="store_true",
-        help="Disable ROS control",
-    )
+
     parser.add_argument(
         "--scene",
         "-s",
@@ -180,7 +186,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    use_ros = args.ros and not args.no_ros
+    use_ros = args.ros
     model = load_model(args.scene)
     run_simulation(model, use_ros=use_ros)
 
