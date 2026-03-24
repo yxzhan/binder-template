@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y ros-jazzy-rosbridge-suite \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
+
+RUN npm i -g pnpm
 #===========================================================#
 
 # Copy content to the image

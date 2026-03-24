@@ -12,7 +12,7 @@ def display_desktop(sub_path="desktop", in_sidecar=True, anchor="split-right", w
                     'split-right', 'split-left', 'split-top', 'split-bottom',
                     'tab-before', 'tab-after'
     """
-    url_prefix = get_base_url
+    url_prefix = get_base_url()
     remote_desktop_url = f"{url_prefix}/{sub_path}"
 
     html_wrapper = HTML(f"""
@@ -57,5 +57,5 @@ def get_base_url():
     except KeyError:
         jupyterhub_user = None
         domain_name = "http://localhost:8888"
-    return f"{domain_name}user/{jupyterhub_user}" if jupyterhub_user is not None else ''
+    return f"{domain_name}user/{jupyterhub_user}" if jupyterhub_user is not None else domain_name
 

@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+node_modules/
+.pnpm-store/
+MUJOCO_LOG.TXT
+
 # C extensions
 *.so
 
