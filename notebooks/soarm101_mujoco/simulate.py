@@ -173,7 +173,7 @@ def main() -> None:
     parser.add_argument(
         "--ros",
         action="store_true",
-        default=False,
+        default=True,
         help="Enable ROS 2 /joint_states subscriber (default: enabled)",
     )
 

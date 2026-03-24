@@ -21,13 +21,34 @@ pip install -r requirements.txt
 
 Access JupyterLab at http://localhost:8888/ after starting.
 
+Ports exposed by docker-compose: `8888` (JupyterLab), `9090` (rosbridge WebSocket).
+
 ## Architecture
 
-- **`binder/`** — Docker environment: `Dockerfile` (base image + AI coding tools + dependencies), `docker-compose.yml` (local dev), `entrypoint.sh` (sources ROS 2 setup, runs at container start)
+- **`binder/`** — Docker environment: `Dockerfile` (base image + AI coding tools + rosbridge + dependencies), `docker-compose.yml` (local dev), `entrypoint.sh` (sources ROS 2 setup at container start via `${ROS_PATH}/setup.bash`)
 - **`notebooks/`** — Jupyter notebooks and Python utilities. `utils.py` provides `display_desktop()` for embedding a remote desktop viewer in JupyterLab via Sidecar widget
-- **`requirements.txt`** — Python deps installed at Docker build time (ipywidgets, sidecar, matplotlib)
+- **`bambot/`** — Git submodule (`yxzhan/bambot`). Clone with `--recurse-submodules`; update with `git submodule update --remote bambot`
+- **`docs/`** — Supplementary documentation (e.g. `rosbridge.md`)
+- **`requirements.txt`** — Python deps installed at Docker build time
 
-All development runs inside the Docker container. The entrypoint sources `${ROS_PATH}/setup.bash` for ROS 2 availability. New apt packages go in the Dockerfile; new Python packages go in `requirements.txt` (then rebuild the image).
+### Dependency layers in the Dockerfile (ordered for cache efficiency)
+
+1. Heavy, rarely-changing tools: ollama, opencode, claude CLI, code-server extensions
+2. `ros-jazzy-rosbridge-suite` apt package (+ `rm -rf /var/lib/apt/lists/*` in same `RUN`)
+3. `COPY requirements.txt` + `pip install` — invalidated only when deps change
+4. `COPY . ${REPO_DIR}/` — invalidated on any file change
+
+New apt packages go in step 2 (grouped with rosbridge). New Python packages go in `requirements.txt`.
+
+### ROS 2 / rosbridge
+
+- rosbridge WebSocket server runs on port `9090`, started with:
+  ```bash
+  source /opt/ros/jazzy/setup.bash
+  ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+  ```
+- The conda Python env is separate from system Python. rosbridge's Python deps (`pymongo`, `cbor2`, `ujson`, `tornado`) must be in `requirements.txt` to be available.
+- In notebooks, always guard `rclpy.init()` with `if not rclpy.ok()` to avoid errors on re-run.
 
 ## Code Style
 
