@@ -1,6 +1,6 @@
-"""SOARM101 Mujoco Pick and Place Simulation.
+"""SOARM101 Mujoco Simulation.
 
-Uses official SOARM101 Mujoco model with pick and place scene.
+Uses official SOARM101 Mujoco model (SO101/scene.xml).
 """
 
 import argparse
@@ -35,14 +35,8 @@ HOME_POSITION = {
 }
 
 
-def load_model(scene: str = "pick_place") -> mujoco.MjModel:
-    pkg_dir = get_package_dir()
-    if scene == "pick_place":
-        xml_path = pkg_dir / "scene_pick_place.xml"
-    elif scene == "official":
-        xml_path = pkg_dir / "SO101" / "scene.xml"
-    else:
-        xml_path = pkg_dir / "SO101" / "so101_new_calib.xml"
+def load_model() -> mujoco.MjModel:
+    xml_path = get_package_dir() / "SO101" / "scene.xml"
 
     if not xml_path.exists():
         print(f"Error: XML file not found: {xml_path}")
@@ -73,47 +67,22 @@ def set_joint_positions(data: mujoco.MjData, joint_pos: dict) -> None:
             data.qpos[qpos_adr] = pos
 
 
-def reset_cube(data: mujoco.MjData, pos: tuple = (0.15, 0.0, 0.45)) -> None:
-    cube_body_id = mujoco.mj_name2id(
-        data.model, mujoco.mjtObj.mjOBJ_BODY, "cube"
-    )
-    if cube_body_id < 0:
-        return
-    jnt_adr = data.model.body_jntadr[cube_body_id]
-    if jnt_adr < 0:
-        return
-    qpos_adr = data.model.jnt_qposadr[jnt_adr]
-    data.qpos[qpos_adr : qpos_adr + 3] = pos
-    data.qpos[qpos_adr + 3 : qpos_adr + 7] = [1.0, 0.0, 0.0, 0.0]
-    data.qvel[jnt_adr * 3 : jnt_adr * 3 + 6] = 0.0
-
-
-def get_end_effector_pos(data: mujoco.MjData) -> tuple:
-    gripper_id = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_BODY, "gripper")
-    if gripper_id < 0:
-        return (0.0, 0.0, 0.0)
-    return tuple(data.xpos[gripper_id])
-
-
 def run_simulation(
     model: mujoco.MjModel, use_ros: bool = False
 ) -> None:
     data = mujoco.MjData(model)
     mujoco.mj_resetData(model, data)
 
+    for name, pos in HOME_POSITION.items():
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+        if aid >= 0:
+            data.ctrl[aid] = pos
     set_joint_positions(data, HOME_POSITION)
     mujoco.mj_forward(model, data)
 
     joint_ids = get_joint_ids(model)
     print(f"Robot joint IDs: {joint_ids}", flush=True)
 
-    print("\n=== SOARM101 Pick & Place Simulation ===", flush=True)
-    print("Controls:", flush=True)
-    print("  [R]      - Reset arm to home position", flush=True)
-    print("  [C]      - Reset cube to start position", flush=True)
-    print("  [H]      - Print end effector position", flush=True)
-    print("  [Q/ESC]  - Quit", flush=True)
-    print("================================\n", flush=True)
 
     ros_bridge = None
     if use_ros:
@@ -140,24 +109,21 @@ def run_simulation(
             )
             use_ros = False
 
-    reset_cube(data)
-
-    def set_joint_targets(data: mujoco.MjData, targets: dict) -> None:
+    def set_actuator_targets(data: mujoco.MjData, targets: dict) -> None:
         for name, pos in targets.items():
-            jid = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_JOINT, name)
-            if jid >= 0:
-                addr = data.model.jnt_qposadr[jid]
-                data.qpos[addr] = pos
-                if data.model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_BALL:
-                    data.qpos[addr + 1 : addr + 4] = [1.0, 0.0, 0.0]
+            aid = mujoco.mj_name2id(data.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            if aid >= 0:
+                data.ctrl[aid] = pos
 
-    with mujoco.viewer.launch_passive(model, data, show_left_ui=True, show_right_ui=True) as viewer:
+    with mujoco.viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=False) as viewer:
+        viewer.user_scn.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
+        viewer.user_scn.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
+
         while viewer.is_running():
             if use_ros and ros_bridge is not None:
                 ros_positions = ros_bridge.get_joint_positions()
                 if ros_positions:
-                    set_joint_targets(data, ros_positions)
-                    mujoco.mj_forward(model, data)
+                    set_actuator_targets(data, ros_positions)
 
             mujoco.mj_step(model, data)
             viewer.sync()
@@ -168,7 +134,7 @@ def run_simulation(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="SOARM101 Mujoco Pick and Place Simulation"
+        description="SOARM101 Mujoco Simulation"
     )
     parser.add_argument(
         "--ros",
@@ -177,17 +143,10 @@ def main() -> None:
         help="Enable ROS 2 /joint_states subscriber (default: enabled)",
     )
 
-    parser.add_argument(
-        "--scene",
-        "-s",
-        choices=["pick_place", "official", "robot"],
-        default="official",
-        help="Scene: 'official', 'pick_place' (table + cube), or 'robot'",
-    )
     args = parser.parse_args()
 
     use_ros = args.ros
-    model = load_model(args.scene)
+    model = load_model()
     run_simulation(model, use_ros=use_ros)
 
 

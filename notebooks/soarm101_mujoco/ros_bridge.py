@@ -25,7 +25,7 @@ if ROS2_AVAILABLE:
             self._lock = threading.Lock()
             self._subscription = self.create_subscription(
                 JointState,
-                "/leader/joint_states",
+                "/joint_states",
                 self._joint_state_callback,
                 10,
             )
