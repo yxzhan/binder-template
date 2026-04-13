@@ -67,6 +67,9 @@ ENV CODE_WORKING_DIRECTORY=${REPO_DIR}
 
 # Copy RViz config
 COPY default.rviz /home/jovyan/.rviz2/default.rviz
+RUN mkdir -p /home/jovyan/.ipython/profile_default/startup /root/.ipython/profile_default/startup
+COPY binder/01-auto-desktop.py /home/jovyan/.ipython/profile_default/startup/01-auto-desktop.py
+COPY binder/01-auto-desktop.py /root/.ipython/profile_default/startup/01-auto-desktop.py
 
 # The entrypoint of the docker image
 COPY binder/entrypoint.sh /entrypoint.sh
