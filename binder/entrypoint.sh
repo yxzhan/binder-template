@@ -5,7 +5,7 @@ set -e
 source "${ROS_PATH}/setup.bash"
 
 import_workspace() {
-    local workspace_file="${JUPYTER_WORKSPACE_FILE:-/home/repo/binder/auto-d.jupyterlab-workspace}"
+    local workspace_file="${JUPYTER_WORKSPACE_FILE:-/home/repo/new-workspace.jupyterlab-workspace}"
 
     if [[ ! -f "${workspace_file}" ]]; then
         return
